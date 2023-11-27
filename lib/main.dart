@@ -1,135 +1,105 @@
-import 'package:http/http.dart' as http;
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter/material.dart';
-import 'get_location.dart';
-import 'dart:convert';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 
-void main() => runApp(const MyApp());
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+void main() {
+  runApp(
+    MaterialApp(
       home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Google Maps Example'),
-        ),
-        body: const MapWithButton(),
+        body: LocationPage(),
       ),
-    );
-  }
+    ),
+  );
 }
 
-class MapWithButton extends StatefulWidget {
-  const MapWithButton({super.key});
+class LocationPage extends StatefulWidget {
+  const LocationPage({Key? key}) : super(key: key);
 
   @override
-  _MapWithButtonState createState() => _MapWithButtonState();
+  State<LocationPage> createState() => _LocationPageState();
 }
 
-class _MapWithButtonState extends State<MapWithButton> {
-  GoogleMapController? _controller;
+class _LocationPageState extends State<LocationPage> {
+  String? _currentAddress;
+  Position? _currentPosition;
 
-  double lat = 41.311081;
-  double lon = 69.240562;
+  Future<bool> _handleLocationPermission() async {
+    bool serviceEnabled;
+    LocationPermission permission;
 
-  Future<void> searchCity(String city) async {
-    try {
-      final url = Uri.parse('https://geocode.maps.co/search?q="${city.trim()}');
-      final response = await http.get(url);
-      List<Location> location = jsonDecode(response.body)
-          .map((json) => Location.fromJson(json))
-          .cast<Location>()
-          .toList();
-      lat = double.tryParse(location[0].lat) ?? 40.7770883;
-      lon = double.tryParse(location[0].lon) ?? 68.3329752;
-    } catch (e) {
-      lat = 41.311081;
-      lon = 69.240562;
-      print('fiewjrhekdebhewfkadfqwh evc');
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Location services are disabled. Please enable the services')));
+      return false;
     }
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permissions are denied')));
+        return false;
+      }
+    }
+    if (permission == LocationPermission.deniedForever) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Location permissions are permanently denied, we cannot request permissions.')));
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _getCurrentPosition() async {
+    final hasPermission = await _handleLocationPermission();
+
+    if (!hasPermission) return;
+    await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high)
+        .then((Position position) {
+      setState(() => _currentPosition = position);
+      _getAddressFromLatLng(_currentPosition!);
+    }).catchError((e) {
+      debugPrint(e);
+    });
+  }
+
+  Future<void> _getAddressFromLatLng(Position position) async {
+    await placemarkFromCoordinates(
+            _currentPosition!.latitude, _currentPosition!.longitude)
+        .then((List<Placemark> placemarks) {
+      Placemark place = placemarks[0];
+      setState(() {
+        _currentAddress =
+            '${place.street}, ${place.subLocality}, ${place.subAdministrativeArea}, ${place.postalCode}';
+      });
+    }).catchError((e) {
+      debugPrint(e);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: <Widget>[
-        GoogleMap(
-          zoomControlsEnabled: false,
-          onMapCreated: (controller) {
-            setState(() {
-              _controller = controller;
-            });
-          },
-          initialCameraPosition: CameraPosition(
-            target: LatLng(lat, lon),
-            zoom: 12,
-          ),
-          markers: {
-            Marker(
-              markerId: const MarkerId("Target"),
-              position: LatLng(lat, lon),
-              icon: BitmapDescriptor.defaultMarker,
-            )
-          },
-        ),
-        SearchBar(
-          onSubmitted: (String value) {
-            searchCity(value);
-            _controller?.animateCamera(
-              CameraUpdate.newCameraPosition(
-                CameraPosition(
-                  target: LatLng(lat, lon),
-                  zoom: 12,
-                ),
-              ),
-            );
-          },
-        ),
-        Positioned(
-          bottom: 160,
-          right: 16,
+    return Scaffold(
+      appBar: AppBar(title: const Text("Location Page")),
+      body: SafeArea(
+        child: Center(
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              FloatingActionButton(
-                onPressed: () {
-                  _controller?.animateCamera(
-                    CameraUpdate.zoomIn(),
-                  );
-                },
-                child: Icon(Icons.add),
-                backgroundColor: Colors.green,
-              ),
-              const SizedBox(height: 16),
-              FloatingActionButton(
-                onPressed: () {
-                  _controller?.animateCamera(CameraUpdate.zoomOut());
-                },
-                child: Icon(Icons.remove),
-                backgroundColor: Colors.red,
-              ),
-              const SizedBox(height: 16),
-              FloatingActionButton(
-                onPressed: () {
-                  setState(() {});
-                  _controller?.animateCamera(
-                    CameraUpdate.newCameraPosition(
-                      CameraPosition(
-                        target: LatLng(lat, lon),
-                        zoom: 12,
-                      ),
-                    ),
-                  );
-                },
-                child: const Icon(Icons.search),
-                backgroundColor: Colors.blue,
-              ),
+              Text('LAT: ${_currentPosition?.latitude ?? ""}'),
+              Text('LNG: ${_currentPosition?.longitude ?? ""}'),
+              Text('ADDRESS: ${_currentAddress ?? ""}'),
+              const SizedBox(height: 32),
+              ElevatedButton(
+                onPressed: _getCurrentPosition,
+                child: const Text("Get Current Location"),
+              )
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 }

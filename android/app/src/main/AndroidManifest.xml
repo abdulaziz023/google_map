@@ -3,9 +3,6 @@
         android:label="learn_map_1"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
-        <meta-data android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyAMUS_eH_E0_qPzIuweJL_NWuRKoI8lj0w"/>
-        
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -32,5 +29,9 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <meta-data android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyA1U88rBSJuIyAJzqOvtIakIiyZaG8YUGk"/>
+
     </application>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
 </manifest>
